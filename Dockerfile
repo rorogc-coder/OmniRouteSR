@@ -9,9 +9,7 @@ WORKDIR /app
 # that already have a fix published in trixie. CVEs without an upstream fix yet
 # (local-only TOCTOU, etc.) remain until the distro patches them and the image
 # is rebuilt; none are reachable from the proxy's request surface at runtime.
-RUN --mount=type=cache,id=omniroute-apt-cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,id=omniroute-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-  apt-get update \
+RUN apt-get update \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends libsecret-1-0 ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -68,9 +66,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build tools for native module compilation
 # apt-get update needed here because base's rm -rf clears the shared cache
-RUN --mount=type=cache,id=omniroute-apt-cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,id=omniroute-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-  apt-get update \
+RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
@@ -104,8 +100,7 @@ RUN test -f package-lock.json \
 # node-gyp comes from npm's own bundled copy (deterministic, already in the image)
 # instead of `npx --yes`, which would install an arbitrary registry version
 # on-demand and run its lifecycle scripts (Sonar docker:S6505).
-RUN --mount=type=cache,id=omniroute-npm-cache,target=/root/.npm \
-  npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts \
+RUN npm ci --include=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts \
   && (cd node_modules/better-sqlite3 \
       && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --force_build=1) \
   && test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node \
@@ -199,8 +194,7 @@ ARG OMNIROUTE_BUILD_WORKERS=2
 ENV CIRCLE_NODE_TOTAL=${OMNIROUTE_BUILD_WORKERS}
 
 COPY . ./
-RUN --mount=type=cache,id=omniroute-next-cache,target=/app/.build/next/cache \
-  mkdir -p /app/data \
+RUN mkdir -p /app/data \
   && npm run build \
   && node --input-type=module -e "import { createRequire } from 'node:module'; import { pathToFileURL } from 'node:url'; const standaloneRoot = '/app/.build/next/standalone/node_modules/'; const require = createRequire('/app/.build/next/standalone/package.json'); for (const pkg of ['@atjsh/llmlingua-2', '@huggingface/transformers', 'js-tiktoken']) { const resolved = require.resolve(pkg); if (!resolved.startsWith(standaloneRoot)) throw new Error(pkg + ' resolved outside standalone: ' + resolved); await import(pathToFileURL(resolved).href); } const onnxRuntime = require.resolve('onnxruntime-node'); if (!onnxRuntime.startsWith(standaloneRoot)) throw new Error('onnxruntime-node resolved outside standalone: ' + onnxRuntime); await import(pathToFileURL(onnxRuntime).href);"
 
